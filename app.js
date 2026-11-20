@@ -82,9 +82,11 @@ async function observation(stationsUrl,point,signal){
   let best;
   for(const station of nearest){
    try{
-    const url=station.id+"/observations/latest";
+    const url=station.id+"/observations?limit=5";
     if(!observationCache.has(url))observationCache.set(url,json(url,signal));
-    const data=await observationCache.get(url),p=data.properties,stamp=Date.parse(p.timestamp);
+    const data=await observationCache.get(url),p=(data.features||[]).map(f=>f.properties).sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp)).find(p=>Date.parse(p.timestamp)<=Date.now()+300000&&(observationValue(p.windSpeed,"wind")!==null||observationValue(p.temperature,"temperature")!==null));
+    if(!p)continue;
+    const stamp=Date.parse(p.timestamp);
     if(!Number.isFinite(stamp)||stamp>Date.now()+300000)continue;
     const wind=observationValue(p.windSpeed,"wind"),gust=observationValue(p.windGust,"wind"),temp=observationValue(p.temperature,"temperature");
     if(wind===null&&temp===null)continue;
