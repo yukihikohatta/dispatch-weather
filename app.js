@@ -241,7 +241,7 @@ function drawHoldPlan(){
  $("hold-plan").innerHTML=details;$("hold-plan").className=holdPlan.status==='clear'?'hold-clear':'hold-required';
  const bannerTitle=holdPlan.status==='wait'?'Stop & wait · '+holdDuration(holdPlan.wait):holdPlan.status==='clear'?'No forecast weather hold identified':holdPlan.status==='restriction'?'Do not continue · Vehicle restriction':'Hold · Restart time unconfirmed';
  $("hold-banner").innerHTML='<strong>'+h(bannerTitle)+'</strong>'+(holdPlan.release&&holdPlan.wait?'<p>Forecast restart review '+h(time(holdPlan.release))+'</p>':'')+'<p>From '+h(activeTrip.originName)+(first?' · Affected stretch: '+h(first.name):'')+'</p><button type="button" id="view-hold-plan">View wait plan &amp; truck parking</button>';
- $("view-hold-plan").onclick=()=>$("hold-plan").scrollIntoView({block:'center',behavior:'smooth'});
+ $("view-hold-plan").onclick=()=>{const plan=$("hold-plan"),aside=plan.closest('aside');if(matchMedia('(max-width:650px)').matches)plan.scrollIntoView({block:'start',behavior:'smooth'});else aside.scrollTo({top:aside.scrollTop+plan.getBoundingClientRect().top-aside.getBoundingClientRect().top-12,behavior:'smooth'});};
  $("parking-list").innerHTML=parking.map(p=>'<article>'+parkingHTML(p)+'<button type="button" data-parked="parking-'+p.id+'">I am parked here · recalculate</button></article>').join('');
  parking.forEach(p=>L.marker([p.lat,p.lon],{icon:L.divIcon({className:'parking-pin',html:'P',iconSize:[23,23],iconAnchor:[11,11]}),title:p.name+' · Listed truck parking'}).bindPopup(parkingHTML(p)+'<p>Parking availability, wind shelter and doubles/triples access are unverified. Do not cross hazardous segments to reach this facility.</p>').addTo(graphicsLayer));
 }
