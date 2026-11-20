@@ -4,7 +4,23 @@ const MAPS={denver:"14a33c3821fb4f07908667c593086384",reno:"86c531a21c614a7283f6
 const DOT={UT:["Utah","https://www.udottraffic.utah.gov/"],AZ:["Arizona","https://az511.gov/"],NV:["Nevada","https://www.nvroads.com/"],WY:["Wyoming","https://www.wyoroad.info/pls/Browse/WRR.RoutesResults?SelectedRoute=I80"],CO:["Colorado","https://www.cotrip.org/"]};
 let routes,route,segments=[],results=[],dotReports=[],alertCheck,view,graphicsLayer,radarLayer,observationLayer;
 let observationCache=new Map();
-let currentCheckpoint=0,checkedAt=0,runController,dataVersion=0,radarTimer,radarTimes=[],activeTrip,currentRisk="Unknown";
+let currentCheckpoint=0,checkedAt=0,runController,dataVersion=0,radarTimer,radarTimes=[],activeTrip,currentRisk="Unknown",holdPlan;
+const PARKING=[
+ {id:"slc",routes:["denver","reno","vegas"],name:"Love's #436 · Salt Lake City",lat:40.769949,lon:-111.939921,address:"25 N Redwood Rd, Salt Lake City, UT",phone:"801-239-1100",spaces:78,url:"https://www.loves.com/locations/ut/salt-lake-city/loves-travel-stop-salt-lake-city-436"},
+ {id:"evanston",routes:["denver"],name:"Pilot #141 · Evanston",lat:41.26834,lon:-110.94204,address:"289 Bear River Dr, Evanston, WY · I-80 exit 6",phone:"307-789-0343",spaces:75,url:"https://pilotcompany.com/locations/us/wy/evanston/289-bear-river-dr"},
+ {id:"wamsutter",routes:["denver"],name:"ONE9 #1251 · Wamsutter",lat:41.67463,lon:-107.97757,address:"399 McCormick St, Wamsutter, WY · I-80 exit 173",phone:"307-372-9196",spaces:58,url:"https://pilotcompany.com/locations/us/wy/wamsutter/399-mccormick-st"},
+ {id:"rawlins",routes:["denver"],name:"Flying J #763 · Rawlins",lat:41.7824,lon:-107.3121,address:"I-80 Johnson Rd, Rawlins, WY · exit 209",phone:"307-328-0158",spaces:200,url:"https://pilotcompany.com/locations/us/wy/rawlins/i-80-johnson-rd"},
+ {id:"laramie",routes:["denver"],name:"Pilot #308 · Laramie",lat:41.32635,lon:-105.61258,address:"1564 N McCue St, Laramie, WY · I-80 exit 310",phone:"307-742-6443",spaces:100,url:"https://pilotcompany.com/locations/us/wy/laramie/1564-n-mccue-st"},
+ {id:"cheyenne",routes:["denver"],name:"Flying J #759 · Cheyenne",lat:41.0991,lon:-104.8536,address:"2250 Etchepare Dr, Cheyenne, WY · I-25 exit 7",phone:"307-635-2138",spaces:180,url:"https://pilotcompany.com/locations/us/wy/cheyenne/2250-etchepare-dr"},
+ {id:"wendover",routes:["reno"],name:"Pilot #147 · West Wendover",lat:40.740116,lon:-114.066598,address:"1200 Wendover Blvd, West Wendover, NV",phone:"775-296-5089",spaces:125,url:"https://pilotcompany.com/locations/us/nv/west-wendover/1200-wendover-blvd"},
+ {id:"wells",routes:["reno"],name:"Flying J #692 · Wells",lat:41.0977,lon:-114.9581,address:"156 US-93, Wells, NV · I-80 exit 352",phone:"775-241-3962",spaces:91,url:"https://pilotcompany.com/locations/us/nv/wells/156-us-93"},
+ {id:"winnemucca",routes:["reno"],name:"Pilot #485 · Winnemucca",lat:40.9306,lon:-117.80453,address:"5625 W Winnemucca Blvd, Winnemucca, NV · I-80 exit 173",phone:"775-625-2800",spaces:43,note:"Store enhancements underway; some amenities may be unavailable.",url:"https://pilotcompany.com/locations/us/nv/winnemucca/5625-w-winnemucca-blvd"},
+ {id:"fernley",routes:["reno"],name:"Pilot #340 · Fernley",lat:39.61319,lon:-119.2655,address:"465 Pilot Rd, Fernley, NV · I-80 exit 46",phone:"775-575-5115",spaces:100,url:"https://pilotcompany.com/locations/us/nv/fernley/465-pilot-rd"},
+ {id:"nephi",routes:["vegas"],name:"Flying J #743 · Nephi",lat:39.6856,lon:-111.8364,address:"1597 S Main St, Nephi, UT · I-15 exit 222",phone:"435-250-4522",spaces:110,url:"https://pilotcompany.com/locations/us/ut/nephi/1597-s-main-st"},
+ {id:"beaver",routes:["vegas"],name:"Flying J Dealer #509 · Beaver",lat:38.293,lon:-112.653,address:"653 W 1400 N, Beaver, UT · I-15 exit 112",phone:"435-438-5191",spaces:120,url:"https://pilotcompany.com/locations/us/ut/beaver/653-w-1400-n"},
+ {id:"cedar",routes:["vegas"],name:"Love's #335 · Cedar City",lat:37.72561,lon:-113.05209,address:"2645 N Canyon Ranch Dr, Cedar City, UT · I-15 exit 62",phone:"435-867-9888",spaces:48,note:"Limited restaurant services listed.",url:"https://www.loves.com/locations/ut/cedar-city/loves-travel-stop-cedar-city-335"},
+ {id:"stgeorge",routes:["vegas"],name:"Pilot #775 · St George",lat:37.0599,lon:-113.5818,address:"2841 S 60 E, Saint George, UT · I-15 exit 4",phone:"435-319-4138",spaces:60,url:"https://pilotcompany.com/locations/us/ut/saint-george/2841-s-60-e"}
+];
 function h(value){const el=document.createElement("span");el.textContent=String(value??"");return el.innerHTML;}
 function time(value){return new Date(value).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"});}
 function mph(value){return Number.isFinite(value)?value.toFixed(1).replace(/\.0$/,"")+" mph":"unavailable";}
@@ -119,7 +135,7 @@ async function forecast(point,signal){
   return {hours,issued,url:p.forecastHourly,zone:p.forecastZone,observation:await observed};
  }catch(error){if(signal.aborted)throw error;return {hours:[],error:error.message,observation:await observed};}
 }
-function covers(hours,start,end){return hours.length>0&&hours[0].start<=start&&hours.at(-1).end>end&&hours.every((hour,i)=>i===0||hours[i-1].end>=hour.start);}
+function covers(hours,start,end){return hours.length>0&&hours[0].start<=start&&hours.at(-1).end>=end&&hours.every((hour,i)=>i===0||hours[i-1].end>=hour.start);}
 function contains(polygon,point){
  function ringInside(ring){
   let inside=false;
@@ -139,7 +155,7 @@ async function alerts(signal){
  catch(error){if(signal.aborted)throw error;return {features:[],ok:false,error:error.message};}
 }
 function evaluate(segment,f,trip,now,alerts){
- const eta=trip.departure+segment.mile/trip.speed*3600000,entry=Math.max(now,trip.departure+segment.start/trip.speed*3600000),exit=Math.max(now,trip.departure+segment.end/trip.speed*3600000);
+ const offset=trip.originMile||0,eta=trip.departure+Math.max(0,segment.mile-offset)/trip.speed*3600000,entry=Math.max(now,trip.departure+Math.max(0,segment.start-offset)/trip.speed*3600000),exit=Math.max(now,trip.departure+Math.max(0,segment.end-offset)/trip.speed*3600000);
  const forecastTime=Math.max(now,eta),hour=f.hours.find(h=>h.start<=forecastTime&&h.end>forecastTime),hours=f.hours.filter(h=>h.end>entry&&h.start<=exit);
  const peakWind=hours.reduce((peak,h)=>Number.isFinite(h.wind)?Math.max(peak??0,h.wind):peak,null),peakG=hours.reduce((peak,h)=>Number.isFinite(h.gust)?Math.max(peak??0,h.gust):peak,null);
  let level=risk(peakWind,peakG),reasons=[];
@@ -172,6 +188,62 @@ function updateSummary(){
  $("assessment").style.borderColor=COLORS[currentRisk];
  $("assessment").innerHTML="<h1>"+head+"</h1><p>"+(results.length-missing)+"/"+results.length+" checkpoints have an hourly forecast. "+(alertCheck.ok?"NWS alert check completed.":"NWS alert check unavailable.")+"</p><p>DOT coverage is partial. Verify closures, chains and vehicle restrictions before dispatch.</p>";
  $("checkpoints").innerHTML=results.map(checkpointHTML).join("");$("report").disabled=false;
+ drawHoldPlan();
+}
+function parkingOnRoute(definition){
+ const miles=[0];for(let i=1;i<definition.coordinates.length;i++)miles.push(miles[i-1]+distance(definition.coordinates[i-1],definition.coordinates[i]));
+ return PARKING.filter(p=>p.routes.includes(definition.id)).map(p=>({...p,...nearest(definition.coordinates,miles,[p.lon,p.lat])})).sort((a,b)=>a.mile-b.mile);
+}
+function fillStartLocations(){
+ if(!routes)return;const definition=routes.find(r=>r.id===$("route").value)||routes[0],points=makeSegments(definition);
+ $("start-location").innerHTML='<option value="origin" data-mile="0">Salt Lake City · Route start</option><optgroup label="Truck parking · select only if here">'+parkingOnRoute(definition).map(p=>'<option value="parking-'+p.id+'" data-mile="'+p.mile+'">'+h(p.name)+'</option>').join('')+'</optgroup><optgroup label="Approximate checkpoint">'+points.slice(1,-1).map((p,i)=>'<option value="checkpoint-'+(i+1)+'" data-mile="'+p.mile+'">'+h(p.name)+'</option>').join('')+'</optgroup>';
+}
+function holdDuration(ms){const mins=Math.ceil(ms/60000);return Math.floor(mins/60)+' hr '+String(mins%60).padStart(2,'0')+' min';}
+function findHoldWindow(rows,trip,now,alerts){
+ const base=Math.max(now,trip.departure),remaining=rows.filter(r=>r.end>(trip.originMile||0));
+ if(!remaining.length)return {status:"finished",base};
+ if(remaining.some(r=>evaluate(r,r.forecast,trip,now,alerts).level==="Impassable"))return {status:"restriction",base};
+ const first=remaining.find(r=>evaluate(r,r.forecast,{...trip,departure:base},now,alerts).level!=="Low");
+ let sawIncomplete=false;
+ for(let minutes=0;minutes<=48*60;minutes+=15){
+  const departure=base+minutes*60000;
+  const assessment=remaining.map(r=>evaluate({...r,end:r.end+trip.speed*2},r.forecast,{...trip,departure},now,alerts));
+  if(assessment.every(r=>r.level==="Low"))return {status:minutes?"wait":"clear",base,release:departure,wait:minutes*60000,first};
+  if(assessment.some(r=>r.level==="Unknown"))sawIncomplete=true;
+ }
+ return {status:"unconfirmed",base,first,incomplete:sawIncomplete};
+}
+function parkingHTML(p){return '<strong>'+h(p.name)+'</strong><p>'+h(p.address)+'</p><p>'+p.spaces+' listed spaces · <a href="tel:'+p.phone+'">'+h(p.phone)+'</a></p><p><a href="'+p.url+'" target="_blank" rel="noopener">Operator details / parking availability</a></p>'+(p.note?'<p>'+h(p.note)+'</p>':'');}
+function holdMessage(plan){
+ if(plan.status==="restriction")return '<h2>Do not continue · Vehicle restriction</h2><p>Waiting for weather will not remove the configuration restriction. Obtain a legal route or change equipment. No weather-based restart time is provided.</p>';
+ if(plan.status==="finished")return '<h2>Selected location is beyond the assessed route</h2>';
+ const location='<p>Plan from <b>'+h(activeTrip.originName)+'</b>, ready '+h(time(plan.base))+'.</p>';
+ const hazard=plan.first?'<p>Do not enter the affected stretch near <b>'+h(plan.first.name)+'</b>. '+h(plan.first.reasons.join(' '))+'</p>':'';
+ if(plan.status==="clear")return '<h2>No forecast weather hold identified</h2>'+location+'<p>Monitored weather stays below the hold thresholds through the remaining trip, with a two-hour buffer after each segment. Confirm DOT status before continuing.</p>';
+ if(plan.status==="wait")return '<h2>Stop in designated truck parking and wait</h2>'+location+'<p class="wait-duration">Estimated wait: '+holdDuration(plan.wait)+'</p><p><b>Earliest forecast restart review: '+h(time(plan.release))+'</b></p>'+hazard+'<p>Remain parked until reassessment. This is a forecast estimate, not automatic clearance to drive.</p>';
+ return '<h2>Hold · Restart time cannot be confirmed</h2>'+location+hazard+'<p>No complete lower-impact passage window was found in the next 48 hours. '+(plan.incomplete?'Wind, gust or alert coverage is incomplete for some windows. ':'')+'Remain in suitable truck parking and refresh conditions. A wait duration cannot be reliably estimated.</p>';
+}
+function drawHoldPlan(){
+ holdPlan=findHoldWindow(results,activeTrip,checkedAt,alertCheck);
+ const parking=parkingOnRoute(route),first=holdPlan.first;
+ const eligible=first?parking.filter(p=>p.mile>activeTrip.originMile+1&&p.mile<first.start-5&&results.filter(r=>r.start<p.mile).every(r=>r.level==="Low")):[];
+ const suggested=eligible.at(-1),nearby=parking.filter(p=>Math.abs(p.mile-activeTrip.originMile)<15);
+ let details=holdMessage(holdPlan);
+ if(holdPlan.status==="wait"||holdPlan.status==="unconfirmed"){
+  details+='<p>If already parked, remain there if the site is suitable. If driving, arrange designated truck parking before the affected stretch. Do not use a highway shoulder or ramp as planned waiting parking.</p>';
+  if(suggested){
+   const arrival=holdPlan.base+(suggested.mile-activeTrip.originMile)/activeTrip.speed*3600000,stopPlan=findHoldWindow(results,{...activeTrip,originMile:suggested.mile,departure:arrival},checkedAt,alertCheck);
+   details+='<article class="suggested-stop"><h3>Parking candidate before the affected stretch</h3>'+parkingHTML(suggested)+'<p>Approximate highway arrival '+h(time(arrival))+'. Approach checkpoints are below the monitored hold thresholds; exit and local access are not assessed.</p>'+(stopPlan.release?'<p><b>Estimated wait after arrival: '+holdDuration(stopPlan.wait)+'</b><br>Forecast restart review '+h(time(stopPlan.release))+'.</p>':'<p>Wait at this stop: restart time cannot be confirmed.</p>')+'<p>Confirm a space, exposure to wind and combination access before heading here.</p></article>';
+  }else details+='<p><b>No forward parking candidate has a fully screened lower-impact approach.</b> Do not drive through the hazard to reach a listed stop.</p>';
+  if(nearby.length)details+='<details open><summary>Listed parking near your selected location · approach unverified</summary>'+nearby.map(p=>'<article>'+parkingHTML(p)+'</article>').join('')+'</details>';
+ }
+ details+='<p class="note">Restart search: every 15 minutes up to 48 hours. Requires sustained wind and gusts ≤30 mph, no monitored precipitation/visibility trigger, and no applicable active alert during passage plus two hours. Alert expiry is not proof of reopening. DOT clearance, hours of service and driver judgment still apply. Refresh before continuing.</p>';
+ $("hold-plan").innerHTML=details;$("hold-plan").className=holdPlan.status==='clear'?'hold-clear':'hold-required';
+ const bannerTitle=holdPlan.status==='wait'?'Stop & wait · '+holdDuration(holdPlan.wait):holdPlan.status==='clear'?'No forecast weather hold identified':holdPlan.status==='restriction'?'Do not continue · Vehicle restriction':'Hold · Restart time unconfirmed';
+ $("hold-banner").innerHTML='<strong>'+h(bannerTitle)+'</strong>'+(holdPlan.release&&holdPlan.wait?'<p>Forecast restart review '+h(time(holdPlan.release))+'</p>':'')+'<p>From '+h(activeTrip.originName)+(first?' · Affected stretch: '+h(first.name):'')+'</p><button type="button" id="view-hold-plan">View wait plan &amp; truck parking</button>';
+ $("view-hold-plan").onclick=()=>$("hold-plan").scrollIntoView({block:'center',behavior:'smooth'});
+ $("parking-list").innerHTML=parking.map(p=>'<article>'+parkingHTML(p)+'<button type="button" data-parked="parking-'+p.id+'">I am parked here · recalculate</button></article>').join('');
+ parking.forEach(p=>L.marker([p.lat,p.lon],{icon:L.divIcon({className:'parking-pin',html:'P',iconSize:[23,23],iconAnchor:[11,11]}),title:p.name+' · Listed truck parking'}).bindPopup(parkingHTML(p)+'<p>Parking availability, wind shelter and doubles/triples access are unverified. Do not cross hazardous segments to reach this facility.</p>').addTo(graphicsLayer));
 }
 function latLngs(points){return points.map(p=>[p[1],p[0]]);}
 function paint(){
@@ -221,7 +293,8 @@ function selectCheckpoint(index){
 function settings(){
  const departure=Date.parse($("departure").value),speed=Number($("speed").value);
  if(!Number.isFinite(departure)||speed<1||speed>85)throw new Error("Enter a valid departure and average speed from 1 to 85 mph.");
- return {departure,speed,equipment:$("equipment").value};
+ const origin=$("start-location").selectedOptions[0];
+ return {departure,speed,equipment:$("equipment").value,originMile:Number(origin?.dataset.mile||0),originName:origin?.textContent||"Salt Lake City"};
 }
 async function dot(signal){
  const states=route.id==="denver"?["UT","WY","CO"]:route.id==="vegas"?["UT","AZ","NV"]:["UT","NV"];
@@ -247,7 +320,9 @@ async function recalculate(){
  if(!routes)return;let trip;try{trip=settings();}catch(error){$("updated").textContent=error.message;return;}
  runController?.abort();runController=new AbortController();const signal=runController.signal,version=++dataVersion;
  $("refresh").disabled=$("apply").disabled=true;$("trip").querySelectorAll("input,select").forEach(el=>el.disabled=true);$("report").disabled=true;observationCache=new Map();observationLayer.clearLayers();$("observation-status").textContent="Loading latest station observations…";pauseRadar();radarTimes=[];$("radar-time").disabled=$("radar-play").disabled=true;if(radarLayer)view.removeLayer(radarLayer);
- route=routes.find(r=>r.id===$("route").value)||routes.find(r=>r.id==="denver");segments=makeSegments(route);activeTrip=trip;checkedAt=Date.now();results=[];currentCheckpoint=0;
+ route=routes.find(r=>r.id===$("route").value)||routes.find(r=>r.id==="denver");segments=makeSegments(route).filter(s=>s.end>trip.originMile);activeTrip=trip;checkedAt=Date.now();results=[];currentCheckpoint=0;holdPlan=null;
+ $("hold-plan").innerHTML='<h2>Checking stop &amp; wait plan…</h2>';$("parking-list").textContent='Loading parking options…';
+ $("hold-banner").textContent='Checking stop & wait recommendation…';
  $("updated").textContent="Fetching fresh NWS forecasts…";$("assessment").innerHTML="<h1>Checking "+h(route.name)+"</h1><p>Loading wind, gusts and conditions along the highway.</p>";
  $("checkpoints").innerHTML="<p>Loading "+segments.length+" forecast checkpoints…</p>";$("chart").textContent="Loading wind forecast…";graphicsLayer.clearLayers();
  L.polyline(latLngs(route.coordinates),{color:COLORS.Unknown,weight:5}).addTo(graphicsLayer);
@@ -289,14 +364,16 @@ async function loadRadar(){
 function printReport(){
  if(!results.length)return;const report=window.open("","_blank");if(!report){$("updated").textContent="Allow the report window to open, then try again.";return;}
  const rows=results.map(row=>'<tr><th>'+h(row.name)+'<br>'+h(time(row.eta))+'</th><td>'+h(row.level)+'<br>'+h(row.reasons.join(" "))+'</td><td>'+h(mph(row.peakWind))+' sustained<br>'+h(mph(row.peakG))+' gust</td><td>'+h(row.easing)+'</td></tr>').join("");
- report.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>'+h(route.name)+' dispatch report</title><style>body{font:16px/1.5 system-ui;margin:30px;color:#193348}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:10px;vertical-align:top;border:1px solid #cad5dd}tr{break-inside:avoid}h1{font-size:26px}p{white-space:pre-line}@media print{button{display:none}}</style></head><body><h1>Salt Lake City to '+h(route.name)+'</h1><p>'+h(currentRisk)+' monitored impact · '+h(activeTrip.equipment)+'\nChecked '+h(time(checkedAt))+'\nDeparture '+h(time(activeTrip.departure))+' · Planned average '+activeTrip.speed+' mph</p><p>Medium rollover risk above 30 and below 50 mph. High risk at 50 mph and above. Wind and gusts are checked across each segment’s estimated passage. Forecast sample spacing and travel delays affect accuracy.</p><table><thead><tr><th>Checkpoint / ETA</th><th>Impact</th><th>Wind</th><th>Arrival assessment</th></tr></thead><tbody>'+rows+'</tbody></table><h2>DOT notices and coverage</h2>'+dotReports.map(r=>'<h3>'+h(r.name)+'</h3><p>'+h(r.status)+'<br>'+h(r.url)+'</p>'+r.notices.map(n=>'<p>'+h(n)+'</p>').join("")).join("")+'<p>DOT coverage is partial. Verify closures, chains, dimensions and permit applicability. Forecast easing does not establish DOT reopening.</p><button onclick="window.print()">Print / save PDF</button></body></html>');report.document.close();
+ report.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>'+h(route.name)+' dispatch report</title><style>body{font:16px/1.5 system-ui;margin:30px;color:#193348}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:10px;vertical-align:top;border:1px solid #cad5dd}tr{break-inside:avoid}h1{font-size:26px}p{white-space:pre-line}@media print{button{display:none}}</style></head><body><h1>Salt Lake City to '+h(route.name)+'</h1><p>'+h(currentRisk)+' monitored impact · '+h(activeTrip.equipment)+'\nChecked '+h(time(checkedAt))+'\nDeparture '+h(time(activeTrip.departure))+' · Planned average '+activeTrip.speed+' mph</p><p>Medium rollover risk above 30 and below 50 mph. High risk at 50 mph and above. Wind and gusts are checked across each segment’s estimated passage. Forecast sample spacing and travel delays affect accuracy.</p><section>'+$('hold-plan').innerHTML+'</section><table><thead><tr><th>Checkpoint / ETA</th><th>Impact</th><th>Wind</th><th>Arrival assessment</th></tr></thead><tbody>'+rows+'</tbody></table><h2>DOT notices and coverage</h2>'+dotReports.map(r=>'<h3>'+h(r.name)+'</h3><p>'+h(r.status)+'<br>'+h(r.url)+'</p>'+r.notices.map(n=>'<p>'+h(n)+'</p>').join("")).join("")+'<p>DOT coverage is partial. Verify closures, chains, dimensions and permit applicability. Forecast easing does not establish DOT reopening.</p><button onclick="window.print()">Print / save PDF</button></body></html>');report.document.close();
 }
 $("departure").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
 $("route").value=new URL(location.href).searchParams.get("route")||"denver";
 $("trip").addEventListener("submit",e=>{e.preventDefault();recalculate();});
 $("refresh").addEventListener("click",recalculate);
+$("route").addEventListener("change",fillStartLocations);
+$("parking-list").addEventListener("click",e=>{const button=e.target.closest('[data-parked]');if(button){$("start-location").value=button.dataset.parked;$("departure").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);recalculate();}});
 $("show-observations").addEventListener("change",()=>{if($("show-observations").checked)observationLayer.addTo(view);else view.removeLayer(observationLayer);});
-$("trip").addEventListener("input",()=>{if(results.length){$("updated").textContent="Trip inputs changed. Apply trip and recalculate."; $("assessment").innerHTML="<h1>Recalculation required</h1><p>Apply the current trip inputs to update route colors and arrival forecasts.</p>"; $("report").disabled=true; graphicsLayer.eachLayer(layer=>layer.setStyle({color:COLORS.Unknown}));}});
+$("trip").addEventListener("input",()=>{if(results.length){$("updated").textContent="Trip inputs changed. Apply trip and recalculate."; $("assessment").innerHTML="<h1>Recalculation required</h1><p>Apply the current trip inputs to update route colors and arrival forecasts.</p>"; $("report").disabled=true; $("hold-banner").textContent="Trip changed · Recalculate before using a wait estimate."; $("hold-plan").innerHTML="<h2>Recalculate the stop &amp; wait plan</h2><p>Trip inputs changed. Apply the current trip before using a wait estimate.</p>"; graphicsLayer.eachLayer(layer=>{if(layer.setStyle)layer.setStyle({color:COLORS.Unknown});});}});
 
 $("checkpoints").addEventListener("click",e=>{const target=e.target.closest("[data-checkpoint]");if(target)selectCheckpoint(Number(target.dataset.checkpoint));});
 $("report").addEventListener("click",printReport);
@@ -316,6 +393,7 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden)pauseRadar(
   observationLayer=L.layerGroup().addTo(view);
   new ResizeObserver(()=>view.invalidateSize({pan:false})).observe($("map"));
   routes=await json("./routes.json");
+  fillStartLocations();
   $("refresh").disabled=$("apply").disabled=false;
   await recalculate();
  }catch(error){$("updated").textContent="Could not load the map · "+error.message;}
