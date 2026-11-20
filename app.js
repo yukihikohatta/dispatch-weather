@@ -143,7 +143,7 @@ function paint(){
  graphicsLayer.clearLayers();
  results.forEach((row,index)=>{
   L.polyline(latLngs(row.coordinates),{color:COLORS[row.level],weight:5,opacity:1})
-   .bindPopup("<strong>"+h(row.name)+" � "+h(row.level)+"</strong><p>ETA "+h(time(row.eta))+"</p><p>Sustained "+h(mph(row.peakWind))+" � Gust "+h(mph(row.peakG))+"</p><p>"+h(row.easing)+"</p>")
+   .bindPopup("<strong>"+h(row.name)+" · "+h(row.level)+"</strong><p>ETA "+h(time(row.eta))+"</p><p>Sustained "+h(mph(row.peakWind))+" · Gust "+h(mph(row.peakG))+"</p><p>"+h(row.easing)+"</p>")
    .on("click",()=>selectCheckpoint(index)).addTo(graphicsLayer);
  });
 }
@@ -266,5 +266,5 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden)pauseRadar(
   routes=await json("./routes.json");
   $("refresh").disabled=$("apply").disabled=false;
   await recalculate();
- }catch(error){$("updated").textContent="Could not load the map � "+error.message;}
+ }catch(error){$("updated").textContent="Could not load the map · "+error.message;}
 })();
