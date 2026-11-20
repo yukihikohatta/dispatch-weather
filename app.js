@@ -2,7 +2,8 @@
 const $=id=>document.getElementById(id),COLORS={Low:"#267354",Medium:"#d69a14",High:"#bb3552",Unknown:"#778795",Impassable:"#873b8d"};
 const MAPS={denver:"14a33c3821fb4f07908667c593086384",reno:"86c531a21c614a7283f6efc3f0088aec",vegas:"086e2405e03344fa9964433e3232dbda"};
 const DOT={UT:["Utah","https://www.udottraffic.utah.gov/"],AZ:["Arizona","https://az511.gov/"],NV:["Nevada","https://www.nvroads.com/"],WY:["Wyoming","https://www.wyoroad.info/pls/Browse/WRR.RoutesResults?SelectedRoute=I80"],CO:["Colorado","https://www.cotrip.org/"]};
-let routes,route,segments=[],results=[],dotReports=[],alertCheck,view,graphicsLayer,radarLayer;
+let routes,route,segments=[],results=[],dotReports=[],alertCheck,view,graphicsLayer,radarLayer,observationLayer;
+let observationCache=new Map();
 let currentCheckpoint=0,checkedAt=0,runController,dataVersion=0,radarTimer,radarTimes=[],activeTrip,currentRisk="Unknown";
 function h(value){const el=document.createElement("span");el.textContent=String(value??"");return el.innerHTML;}
 function time(value){return new Date(value).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"});}
@@ -65,10 +66,42 @@ function peakGust(start,end,values,multiplier){
  }
  return covered>=end?peak:null;
 }
+function observationValue(value,kind){
+ if(!Number.isFinite(value?.value))return null;
+ const unit=value.unitCode?.split(":").at(-1),n=value.value;
+ if(kind==="temperature")return unit==="degC"?n*1.8+32:unit==="degF"?n:null;
+ const factor={"km_h-1":.621371192,"m_s-1":2.23693629,"mi_h-1":1,"kn":1.15077945,"kt":1.15077945}[unit];
+ return Number.isFinite(factor)?n*factor:null;
+}
+async function observation(stationsUrl,point,signal){
+ try{
+  if(!stationsUrl)throw new Error("Nearby stations unavailable");
+  if(!observationCache.has(stationsUrl))observationCache.set(stationsUrl,json(stationsUrl,signal));
+  const stations=(await observationCache.get(stationsUrl)).features||[];
+  const nearest=stations.filter(s=>s.geometry?.type==="Point").sort((a,b)=>distance(a.geometry.coordinates,[point.lon,point.lat])-distance(b.geometry.coordinates,[point.lon,point.lat])).slice(0,3);
+  let best;
+  for(const station of nearest){
+   try{
+    const url=station.id+"/observations/latest";
+    if(!observationCache.has(url))observationCache.set(url,json(url,signal));
+    const data=await observationCache.get(url),p=data.properties,stamp=Date.parse(p.timestamp);
+    if(!Number.isFinite(stamp)||stamp>Date.now()+300000)continue;
+    const wind=observationValue(p.windSpeed,"wind"),gust=observationValue(p.windGust,"wind"),temp=observationValue(p.temperature,"temperature");
+    if(wind===null&&temp===null)continue;
+    const row={station:station.properties.stationIdentifier||station.id.split("/").at(-1),name:station.properties.name,coordinates:station.geometry.coordinates,stamp,wind,gust,temp,conditions:p.textDescription||"Conditions unavailable",direction:p.windDirection?.value,url};
+    if(!best||stamp>best.stamp)best=row;
+    if(Date.now()-stamp<=90*60000)return row;
+   }catch(error){if(signal.aborted)throw error;}
+  }
+  return best||{error:"No usable station observation"};
+ }catch(error){return {error:error.message};}
+}
 async function forecast(point,signal){
+ let observed=Promise.resolve({error:"Observation lookup unavailable"});
  try{
   const key=[point.lat,point.lon].map(n=>n.toFixed(4)).join(",");
   const p=(await json("https://api.weather.gov/points/"+key,signal)).properties;
+  observed=observation(p.observationStations,point,signal);
   if(!p.forecastHourly||!p.forecastGridData)throw new Error("Forecast endpoints unavailable");
   const [hourly,grid]=await Promise.allSettled([json(p.forecastHourly+"?units=us",signal),json(p.forecastGridData,signal)]);
   if(hourly.status!=="fulfilled")throw hourly.reason;
@@ -81,8 +114,8 @@ async function forecast(point,signal){
    const wind=String(row.windSpeed).toLowerCase()==="calm"?0:/mph/i.test(row.windSpeed)&&speeds?Math.max(...speeds.map(Number)):null;
    return {start,end,wind,gust:Number.isFinite(factor)?peakGust(start,end,validGrid.values,factor):null,temp:row.temperatureUnit==="F"?row.temperature:row.temperature*1.8+32,precip:row.probabilityOfPrecipitation?.value,conditions:row.shortForecast,direction:row.windDirection};
   });
-  return {hours,issued,url:p.forecastHourly,zone:p.forecastZone};
- }catch(error){if(signal.aborted)throw error;return {hours:[],error:error.message};}
+  return {hours,issued,url:p.forecastHourly,zone:p.forecastZone,observation:await observed};
+ }catch(error){if(signal.aborted)throw error;return {hours:[],error:error.message,observation:await observed};}
 }
 function covers(hours,start,end){return hours.length>0&&hours[0].start<=start&&hours.at(-1).end>end&&hours.every((hour,i)=>i===0||hours[i-1].end>=hour.start);}
 function contains(polygon,point){
@@ -146,6 +179,21 @@ function paint(){
    .bindPopup("<strong>"+h(row.name)+" · "+h(row.level)+"</strong><p>ETA "+h(time(row.eta))+"</p><p>Sustained "+h(mph(row.peakWind))+" · Gust "+h(mph(row.peakG))+"</p><p>"+h(row.easing)+"</p>")
    .on("click",()=>selectCheckpoint(index)).addTo(graphicsLayer);
  });
+ paintObservations();
+}
+function paintObservations(){
+ observationLayer.clearLayers();const stations=new Map();
+ for(const row of results){const o=row.forecast.observation;if(o?.station){if(!stations.has(o.station))stations.set(o.station,{...o,checkpoints:[]});stations.get(o.station).checkpoints.push(row.name);}}
+ const fresh=[...stations.values()].filter(o=>Date.now()-o.stamp<=90*60000).length;
+ $("observation-status").textContent=fresh+" recent / "+stations.size+" reporting stations · Route colors show forecast impact at arrival.";
+ for(const o of stations.values()){
+  const stale=Date.now()-o.stamp>90*60000,level=stale?"Unknown":risk(o.wind,o.gust),temp=Number.isFinite(o.temp)?Math.round(o.temp)+"°F":"—°F";
+  const label='<div class="weather-marker" style="border-color:'+COLORS[level]+'"><strong>'+h(temp)+'</strong><span>'+h(mph(o.wind))+'</span>'+(stale?'<small>Old report</small>':'')+'</div>';
+  const age=Math.max(0,Math.round((Date.now()-o.stamp)/60000));
+  const popup='<div class="observation-popup"><strong>'+h(o.name||o.station)+'</strong><p><b>Latest station observation'+(stale?' · STALE':'')+'</b><br>'+h(o.conditions)+'</p><p>Temperature '+h(temp)+'<br>Wind '+h(mph(o.wind))+(Number.isFinite(o.direction)?' from '+Math.round(o.direction)+'°':'')+'<br>Gust '+h(mph(o.gust))+'</p><p>Observed '+h(time(o.stamp))+' · '+age+' min ago<br>Station '+h(o.station)+'</p><p>Nearby checkpoints: '+h(o.checkpoints.join(', '))+'</p><p>Station conditions may differ on the highway. Missing gusts are not assumed calm.</p></div>';
+  L.marker([o.coordinates[1],o.coordinates[0]],{icon:L.divIcon({className:"weather-station",html:label,iconSize:[72,44],iconAnchor:[36,22]}),title:(o.name||o.station)+": "+o.conditions+", "+temp+", wind "+mph(o.wind),zIndexOffset:400}).bindPopup(popup).addTo(observationLayer);
+ }
+ if($("show-observations").checked&&!view.hasLayer(observationLayer))observationLayer.addTo(view);
 }
 function chart(row){
  const from=checkedAt,end=Math.max(from+16*3600000,row.eta+4*3600000),hours=row.forecast.hours.filter(h=>h.end>from&&h.start<end);
@@ -196,7 +244,7 @@ function drawDot(){$("dot").innerHTML=dotReports.map(r=>'<article><h3><a href="'
 async function recalculate(){
  if(!routes)return;let trip;try{trip=settings();}catch(error){$("updated").textContent=error.message;return;}
  runController?.abort();runController=new AbortController();const signal=runController.signal,version=++dataVersion;
- $("refresh").disabled=$("apply").disabled=true;$("report").disabled=true;pauseRadar();radarTimes=[];$("radar-time").disabled=$("radar-play").disabled=true;if(radarLayer)view.removeLayer(radarLayer);
+ $("refresh").disabled=$("apply").disabled=true;$("trip").querySelectorAll("input,select").forEach(el=>el.disabled=true);$("report").disabled=true;observationCache=new Map();observationLayer.clearLayers();$("observation-status").textContent="Loading latest station observations…";pauseRadar();radarTimes=[];$("radar-time").disabled=$("radar-play").disabled=true;if(radarLayer)view.removeLayer(radarLayer);
  route=routes.find(r=>r.id===$("route").value)||routes.find(r=>r.id==="denver");segments=makeSegments(route);activeTrip=trip;checkedAt=Date.now();results=[];currentCheckpoint=0;
  $("updated").textContent="Fetching fresh NWS forecasts…";$("assessment").innerHTML="<h1>Checking "+h(route.name)+"</h1><p>Loading wind, gusts and conditions along the highway.</p>";
  $("checkpoints").innerHTML="<p>Loading "+segments.length+" forecast checkpoints…</p>";$("chart").textContent="Loading wind forecast…";graphicsLayer.clearLayers();
@@ -211,7 +259,7 @@ async function recalculate(){
   $("updated").textContent="Checked "+time(checkedAt)+" · "+(trip.departure<checkedAt-60000?"Departure is in the past. ":"")+"Refresh to check again.";
   const url=new URL(location.href);url.searchParams.set("route",route.id);history.replaceState(null,"",url);
  }catch(error){if(!signal.aborted){$("updated").textContent="Route check failed · "+error.message;$("assessment").innerHTML="<h1>Route check incomplete</h1><p>Refresh to retry. Verify official weather and DOT reports.</p>";}}
- finally{if(version===dataVersion)$("refresh").disabled=$("apply").disabled=false;}
+ finally{if(version===dataVersion){$("refresh").disabled=$("apply").disabled=false;$("trip").querySelectorAll("input,select").forEach(el=>el.disabled=false);}}
 }
 function pauseRadar(){clearInterval(radarTimer);radarTimer=null;$("radar-play").textContent="Play";}
 function showRadarFrame(){
@@ -245,6 +293,7 @@ $("departure").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).t
 $("route").value=new URL(location.href).searchParams.get("route")||"denver";
 $("trip").addEventListener("submit",e=>{e.preventDefault();recalculate();});
 $("refresh").addEventListener("click",recalculate);
+$("show-observations").addEventListener("change",()=>{if($("show-observations").checked)observationLayer.addTo(view);else view.removeLayer(observationLayer);});
 $("trip").addEventListener("input",()=>{if(results.length){$("updated").textContent="Trip inputs changed. Apply trip and recalculate."; $("assessment").innerHTML="<h1>Recalculation required</h1><p>Apply the current trip inputs to update route colors and arrival forecasts.</p>"; $("report").disabled=true; graphicsLayer.eachLayer(layer=>layer.setStyle({color:COLORS.Unknown}));}});
 
 $("checkpoints").addEventListener("click",e=>{const target=e.target.closest("[data-checkpoint]");if(target)selectCheckpoint(Number(target.dataset.checkpoint));});
@@ -262,6 +311,7 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden)pauseRadar(
    attribution:"Tiles © Esri · USGS · NOAA",maxZoom:18
   }).addTo(view);
   graphicsLayer=L.layerGroup().addTo(view);
+  observationLayer=L.layerGroup().addTo(view);
   new ResizeObserver(()=>view.invalidateSize({pan:false})).observe($("map"));
   routes=await json("./routes.json");
   $("refresh").disabled=$("apply").disabled=false;
