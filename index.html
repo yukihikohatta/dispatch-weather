@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dispatch Weather | Salt Lake City corridors</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="./style.css?v=20261120-6">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script defer src="./app.js?v=20261120-7"></script></head>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="./style.css?v=20261120-8">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script defer src="./app.js?v=20261120-8"></script></head>
 <body>
 <header><div><span class="brand">Dispatch Weather</span><p>Salt Lake City freight corridors</p></div><div id="updated" role="status">Preparing map…</div><button id="refresh" disabled>Refresh conditions</button></header>
 <main><aside>
@@ -19,7 +19,7 @@
 <div id="checkpoints"><p>Waiting for forecasts…</p></div><section id="dot" hidden></section>
 <button id="report" disabled>Print / save route report</button>
 </aside>
-<div class="workspace"><div class="map-container"><div id="map" aria-label="Route weather impact map"></div><div class="observation-key"><label><input type="checkbox" id="show-observations" checked>Current conditions · °F / wind mph</label><p id="observation-status" role="status">Loading latest station observations…</p></div><div id="hold-banner" role="status">Checking stop &amp; wait recommendation…</div></div>
+<div class="workspace"><div class="map-container"><div id="map" aria-label="Route weather impact map"></div><div class="observation-key"><label><input type="checkbox" id="show-observations" checked>Current conditions · °F / wind mph</label><p id="observation-status" role="status">Loading latest station observations…</p></div><div id="hold-banner" role="status">Checking stop &amp; wait recommendation…</div><button type="button" id="hold-reopen" hidden>Stop &amp; wait</button></div>
 <section class="detail"><div class="detail-head"><div><h2 id="checkpoint-name">Wind forecast</h2><p id="arrival-summary">Select a checkpoint to see its forecast.</p></div><button id="radar-toggle">Show radar</button></div>
 <div id="chart" aria-label="Forecast sustained wind and gust chart"></div>
 <div id="radar" hidden><div class="radar-controls"><button id="radar-load">Load five-hour loop</button><button id="radar-play" disabled>Play</button><input id="radar-time" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Radar scan time"><span id="radar-status" role="status"></span></div><p class="note">Observed reflectivity · NOAA nowCOAST · Available scans ending at the latest observation.</p></div>
