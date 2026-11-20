@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dispatch Weather | Salt Lake City corridors</title>
+<link rel="stylesheet" href="https://js.arcgis.com/4.34/esri/themes/light/main.css"><link rel="stylesheet" href="./style.css">
+<script src="https://js.arcgis.com/4.34/"></script><script defer src="./app.js"></script></head>
+<body>
+<header><div><span class="brand">Dispatch Weather</span><p>Salt Lake City freight corridors</p></div><div id="updated" role="status">Preparing map…</div><button id="refresh" disabled>Refresh conditions</button></header>
+<main><aside>
+<form id="trip"><label>Destination<select id="route"><option value="denver">Denver, CO · I-80 / I-25</option><option value="reno">Reno, NV · I-80</option><option value="vegas">Las Vegas, NV · I-15</option></select></label>
+<div class="pair"><label>Configuration<select id="equipment"><option value="single">Single trailer</option><option value="doubles">Doubles</option><option value="triples">Triples</option></select></label><label>Average speed · mph<input id="speed" type="number" value="55" min="1" max="85" required></label></div>
+<label>Planned departure · your local time<input id="departure" type="datetime-local" required></label>
+<button type="submit" id="apply" disabled>Apply trip and recalculate</button></form>
+<section id="assessment" aria-live="polite"><h1>Checking route</h1><p>Fresh forecasts load when you open this page.</p></section>
+<div class="legend"><span class="low">≤30 mph</span><span class="medium">&gt;30 to &lt;50</span><span class="high">≥50 mph</span><span class="unknown">Incomplete</span></div>
+<p class="note">Rollover screening uses sustained wind and gusts. Forecasts are sampled along the corridor. DOT notices and road restrictions require a separate check.</p>
+<nav class="tabs"><button id="show-checkpoints" class="active">Checkpoints</button><button id="show-dot">DOT notices</button></nav>
+<div id="checkpoints"><p>Waiting for forecasts…</p></div><section id="dot" hidden></section>
+<button id="report" disabled>Print / save route report</button>
+</aside>
+<div class="workspace"><div id="map" aria-label="Route weather impact map"></div>
+<section class="detail"><div class="detail-head"><div><h2 id="checkpoint-name">Wind forecast</h2><p id="arrival-summary">Select a checkpoint to see its forecast.</p></div><button id="radar-toggle">Show radar</button></div>
+<div id="chart" aria-label="Forecast sustained wind and gust chart"></div>
+<div id="radar" hidden><div class="radar-controls"><button id="radar-load">Load five-hour loop</button><button id="radar-play" disabled>Play</button><input id="radar-time" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Radar scan time"><span id="radar-status" role="status"></span></div><p class="note">Observed reflectivity · NOAA nowCOAST · Available scans ending at the latest observation.</p></div>
+</section></div></main>
+<footer>Forecasts <a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noopener">National Weather Service</a> · Route geometry USDOT/FHWA NHS 2025 and BLM/WYDOT · <a id="original" href="https://householdgis.maps.arcgis.com/apps/mapviewer/index.html?webmap=14a33c3821fb4f07908667c593086384" target="_blank" rel="noopener">Original ArcGIS web map</a></footer>
+</body></html>
