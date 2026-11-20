@@ -240,7 +240,8 @@ function drawHoldPlan(){
  details+='<p class="note">Restart search: every 15 minutes up to 48 hours. Requires sustained wind and gusts ≤30 mph, no monitored precipitation/visibility trigger, and no applicable active alert during passage plus two hours. Alert expiry is not proof of reopening. DOT clearance, hours of service and driver judgment still apply. Refresh before continuing.</p>';
  $("hold-plan").innerHTML=details;$("hold-plan").className=holdPlan.status==='clear'?'hold-clear':'hold-required';
  const bannerTitle=holdPlan.status==='wait'?'Stop & wait · '+holdDuration(holdPlan.wait):holdPlan.status==='clear'?'No forecast weather hold identified':holdPlan.status==='restriction'?'Do not continue · Vehicle restriction':'Hold · Restart time unconfirmed';
- $("hold-banner").innerHTML='<strong>'+h(bannerTitle)+'</strong>'+(holdPlan.release&&holdPlan.wait?'<p>Forecast restart review '+h(time(holdPlan.release))+'</p>':'')+'<p>From '+h(activeTrip.originName)+(first?' · Affected stretch: '+h(first.name):'')+'</p><button type="button" id="view-hold-plan">View wait plan &amp; truck parking</button>';
+ $("hold-banner").innerHTML='<button type="button" id="hold-close" aria-label="Close stop and wait window" title="Close">&times;</button><strong>'+h(bannerTitle)+'</strong>'+(holdPlan.release&&holdPlan.wait?'<p>Forecast restart review '+h(time(holdPlan.release))+'</p>':'')+'<p>From '+h(activeTrip.originName)+(first?' · Affected stretch: '+h(first.name):'')+'</p><button type="button" id="view-hold-plan">View wait plan &amp; truck parking</button>';
+ $("hold-close").onclick=()=>{$("hold-banner").hidden=true;$("hold-reopen").hidden=false;};
  $("view-hold-plan").onclick=()=>{const plan=$("hold-plan"),aside=plan.closest('aside');if(matchMedia('(max-width:650px)').matches)plan.scrollIntoView({block:'start',behavior:'smooth'});else aside.scrollTo({top:aside.scrollTop+plan.getBoundingClientRect().top-aside.getBoundingClientRect().top-12,behavior:'smooth'});};
  $("parking-list").innerHTML=parking.map(p=>'<article>'+parkingHTML(p)+'<button type="button" data-parked="parking-'+p.id+'">I am parked here · recalculate</button></article>').join('');
  parking.forEach(p=>L.marker([p.lat,p.lon],{icon:L.divIcon({className:'parking-pin',html:'P',iconSize:[23,23],iconAnchor:[11,11]}),title:p.name+' · Listed truck parking'}).bindPopup(parkingHTML(p)+'<p>Parking availability, wind shelter and doubles/triples access are unverified. Do not cross hazardous segments to reach this facility.</p>').addTo(graphicsLayer));
@@ -265,7 +266,7 @@ function paintObservations(){
   const label='<div class="weather-marker" style="border-color:'+COLORS[level]+'"><strong>'+h(temp)+'</strong><span>'+h(mph(o.wind))+'</span>'+(stale?'<small>Old report</small>':'')+'</div>';
   const age=Math.max(0,Math.round((Date.now()-o.stamp)/60000));
   const popup='<div class="observation-popup"><strong>'+h(o.name||o.station)+'</strong><p><b>Latest station observation'+(stale?' · STALE':'')+'</b><br>'+h(o.conditions)+'</p><p>Temperature '+h(temp)+'<br>Wind '+h(mph(o.wind))+(Number.isFinite(o.direction)?' from '+Math.round(o.direction)+'°':'')+'<br>Gust '+h(mph(o.gust))+'</p><p>Observed '+h(time(o.stamp))+' · '+age+' min ago<br>Station '+h(o.station)+'</p><p>Nearby checkpoints: '+h(o.checkpoints.join(', '))+'</p><p>Station conditions may differ on the highway. Missing gusts are not assumed calm.</p></div>';
-  L.marker([o.coordinates[1],o.coordinates[0]],{icon:L.divIcon({className:"weather-station",html:label,iconSize:[72,44],iconAnchor:[36,22]}),title:(o.name||o.station)+": "+o.conditions+", "+temp+", wind "+mph(o.wind),zIndexOffset:400}).bindPopup(popup).addTo(observationLayer);
+  L.marker([o.coordinates[1],o.coordinates[0]],{icon:L.divIcon({className:"weather-station",html:label,iconSize:[60,36],iconAnchor:[30,18]}),title:(o.name||o.station)+": "+o.conditions+", "+temp+", wind "+mph(o.wind),zIndexOffset:400}).bindPopup(popup).addTo(observationLayer);
  }
  if($("show-observations").checked&&!view.hasLayer(observationLayer))observationLayer.addTo(view);
 }
@@ -323,6 +324,7 @@ async function recalculate(){
  route=routes.find(r=>r.id===$("route").value)||routes.find(r=>r.id==="denver");segments=makeSegments(route).filter(s=>s.end>trip.originMile);activeTrip=trip;checkedAt=Date.now();results=[];currentCheckpoint=0;holdPlan=null;
  $("hold-plan").innerHTML='<h2>Checking stop &amp; wait plan…</h2>';$("parking-list").textContent='Loading parking options…';
  $("hold-banner").textContent='Checking stop & wait recommendation…';
+ $("hold-banner").hidden=false;$("hold-reopen").hidden=true;
  $("updated").textContent="Fetching fresh NWS forecasts…";$("assessment").innerHTML="<h1>Checking "+h(route.name)+"</h1><p>Loading wind, gusts and conditions along the highway.</p>";
  $("checkpoints").innerHTML="<p>Loading "+segments.length+" forecast checkpoints…</p>";$("chart").textContent="Loading wind forecast…";graphicsLayer.clearLayers();
  L.polyline(latLngs(route.coordinates),{color:COLORS.Unknown,weight:5}).addTo(graphicsLayer);
@@ -370,6 +372,7 @@ $("departure").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).t
 $("route").value=new URL(location.href).searchParams.get("route")||"denver";
 $("trip").addEventListener("submit",e=>{e.preventDefault();recalculate();});
 $("refresh").addEventListener("click",recalculate);
+$("hold-reopen").onclick=()=>{$("hold-banner").hidden=false;$("hold-reopen").hidden=true;};
 $("route").addEventListener("change",fillStartLocations);
 $("parking-list").addEventListener("click",e=>{const button=e.target.closest('[data-parked]');if(button){$("start-location").value=button.dataset.parked;$("departure").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);recalculate();}});
 $("show-observations").addEventListener("change",()=>{if($("show-observations").checked)observationLayer.addTo(view);else view.removeLayer(observationLayer);});
