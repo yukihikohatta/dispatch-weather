@@ -1,22 +1,25 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dispatch Weather | Salt Lake City corridors</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="./style.css?v=20261120-5">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script defer src="./app.js?v=20261120-4"></script></head>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="./style.css?v=20261120-6">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script defer src="./app.js?v=20261120-6"></script></head>
 <body>
 <header><div><span class="brand">Dispatch Weather</span><p>Salt Lake City freight corridors</p></div><div id="updated" role="status">Preparing map…</div><button id="refresh" disabled>Refresh conditions</button></header>
 <main><aside>
 <form id="trip"><label>Destination<select id="route"><option value="denver">Denver, CO · I-80 / I-25</option><option value="reno">Reno, NV · I-80</option><option value="vegas">Las Vegas, NV · I-15</option></select></label>
+<label>Start / current location<select id="start-location"><option value="origin">Salt Lake City · Route start</option></select></label><p class="note">Select where the truck is now. No live GPS tracking. Parking entries represent listed facilities, not confirmed available spaces.</p>
 <div class="pair"><label>Configuration<select id="equipment"><option value="single">Single trailer</option><option value="doubles">Doubles</option><option value="triples">Triples</option></select></label><label>Average speed · mph<input id="speed" type="number" value="55" min="1" max="85" required></label></div>
-<label>Planned departure · your local time<input id="departure" type="datetime-local" required></label>
+<label>Departure / ready to continue · your local time<input id="departure" type="datetime-local" required></label>
 <button type="submit" id="apply" disabled>Apply trip and recalculate</button></form>
 <section id="assessment" aria-live="polite"><h1>Checking route</h1><p>Fresh forecasts load when you open this page.</p></section>
+<section id="hold-plan" aria-live="polite"><h2>Stop &amp; wait plan</h2><p>Checking estimated wait and parking options…</p></section>
+<details id="parking-directory"><summary>Truck parking along this route</summary><p class="note">Operator listings checked Nov 20, 2026. Call to confirm an available space, access direction, local weather exposure, and room for your entire combination. Spaces shown are listed capacity, not live vacancies.</p><div id="parking-list"></div></details>
 <div class="legend"><span class="low">≤30 mph</span><span class="medium">&gt;30 to &lt;50</span><span class="high">≥50 mph</span><span class="unknown">Incomplete</span></div>
 <p class="note">Rollover screening uses sustained wind and gusts. Forecasts are sampled along the corridor. DOT notices and road restrictions require a separate check.</p>
 <nav class="tabs"><button id="show-checkpoints" class="active">Checkpoints</button><button id="show-dot">DOT notices</button></nav>
 <div id="checkpoints"><p>Waiting for forecasts…</p></div><section id="dot" hidden></section>
 <button id="report" disabled>Print / save route report</button>
 </aside>
-<div class="workspace"><div class="map-container"><div id="map" aria-label="Route weather impact map"></div><div class="observation-key"><label><input type="checkbox" id="show-observations" checked>Current conditions · °F / wind mph</label><p id="observation-status" role="status">Loading latest station observations…</p></div></div>
+<div class="workspace"><div class="map-container"><div id="map" aria-label="Route weather impact map"></div><div class="observation-key"><label><input type="checkbox" id="show-observations" checked>Current conditions · °F / wind mph</label><p id="observation-status" role="status">Loading latest station observations…</p></div><div id="hold-banner" role="status">Checking stop &amp; wait recommendation…</div></div>
 <section class="detail"><div class="detail-head"><div><h2 id="checkpoint-name">Wind forecast</h2><p id="arrival-summary">Select a checkpoint to see its forecast.</p></div><button id="radar-toggle">Show radar</button></div>
 <div id="chart" aria-label="Forecast sustained wind and gust chart"></div>
 <div id="radar" hidden><div class="radar-controls"><button id="radar-load">Load five-hour loop</button><button id="radar-play" disabled>Play</button><input id="radar-time" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Radar scan time"><span id="radar-status" role="status"></span></div><p class="note">Observed reflectivity · NOAA nowCOAST · Available scans ending at the latest observation.</p></div>
